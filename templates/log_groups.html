@@ -6,28 +6,143 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log Groups</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        .favorite-button {
+            cursor: pointer;
+            font-size: 1.2em;
+            color: gold;
+            margin-left: 5px;
+        }
+        .favorite-button.not-favorite {
+            color: lightgray;
+        }
+    </style>
 </head>
 <body>
     <main class="container">
         <h1>Log Groups</h1>
+
+        <h2>Favorites</h2>
+        <table id="favorite-log-groups-table">
+            <thead>
+                <tr>
+                    <th>Log Group Name</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group_name in favorites.log_groups %}
+                <tr>
+                    <td><a href="/log-group/{{ (group_name if group_name.startswith('/') else '/' + group_name) | urlencode }}">{{ group_name }}</a></td>
+                    <td><span class="favorite-button" data-log-group-name="{{ group_name }}" data-is-favorite="true">★</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h2>All Log Groups</h2>
         <table>
             <thead>
                 <tr>
                     <th>Log Group Name</th>
                     <th>Creation Time</th>
                     <th>Stored Bytes</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for log_group in log_groups %}
                 <tr>
-                    <td><a href="/log-group/{{ log_group.logGroupName | urlencode }}">{{ log_group.logGroupName }}</a></td>
+                    <td><a href="/log-group/{{ (log_group.logGroupName if log_group.logGroupName.startswith('/') else '/' + log_group.logGroupName) | urlencode }}">{{ log_group.logGroupName }}</a></td>
                     <td>{{ log_group.creationTime }}</td>
                     <td>{{ log_group.storedBytes }}</td>
+                    <td>
+                        <span class="favorite-button {% if log_group.is_favorite %}is-favorite{% else %}not-favorite{% endif %}" 
+                              data-log-group-name="{{ log_group.logGroupName }}" 
+                              data-is-favorite="{{ log_group.is_favorite | tojson }}">★</span>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.favorite-button').forEach(button => {
+                button.addEventListener('click', async (event) => {
+                    const logGroupName = event.target.dataset.logGroupName;
+                    const isFavorite = event.target.dataset.isFavorite === 'true';
+
+                    const response = await fetch(`/favorite/log-group/${encodeURIComponent(logGroupName)}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (data.status === 'success') {
+                        // Update the button's appearance
+                        event.target.dataset.isFavorite = String(!isFavorite);
+                        if (isFavorite) {
+                            event.target.classList.remove('is-favorite');
+                            event.target.classList.add('not-favorite');
+                        } else {
+                            event.target.classList.remove('not-favorite');
+                            event.target.classList.add('is-favorite');
+                        }
+                        // Re-render favorites section
+                        updateFavoritesTable(data.favorites.log_groups);
+                    }
+                });
+            });
+        });
+
+        function updateFavoritesTable(favoriteLogGroups) {
+            const tableBody = document.querySelector('#favorite-log-groups-table tbody');
+            tableBody.innerHTML = ''; // Clear existing rows
+
+            favoriteLogGroups.forEach(groupName => {
+                const row = tableBody.insertRow();
+                const nameCell = row.insertCell();
+                const buttonCell = row.insertCell();
+
+                nameCell.innerHTML = `<a href="/log-group/${encodeURIComponent(groupName)}">${groupName}</a>`;
+                buttonCell.innerHTML = `<span class="favorite-button is-favorite" data-log-group-name="${groupName}" data-is-favorite="true">★</span>`;
+            });
+            // Re-attach event listeners to new favorite buttons
+            document.querySelectorAll('#favorite-log-groups-table .favorite-button').forEach(button => {
+                button.addEventListener('click', async (event) => {
+                    const logGroupName = event.target.dataset.logGroupName;
+                    const isFavorite = event.target.dataset.isFavorite === 'true';
+
+                    const response = await fetch(`/favorite/log-group/${encodeURIComponent(logGroupName)}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (data.status === 'success') {
+                        updateFavoritesTable(data.favorites.log_groups);
+                        // Also update the star in the "All Log Groups" table
+                        const allLogGroupsButton = document.querySelector(`table:not(#favorite-log-groups-table) .favorite-button[data-log-group-name="${logGroupName}"]`);
+                        if (allLogGroupsButton) {
+                            allLogGroupsButton.dataset.isFavorite = String(!isFavorite);
+                            if (isFavorite) {
+                                allLogGroupsButton.classList.remove('is-favorite');
+                                allLogGroupsButton.classList.add('not-favorite');
+                            } else {
+                                allLogGroupsButton.classList.remove('not-favorite');
+                                allLogGroupsButton.classList.add('is-favorite');
+                            }
+                        }
+                    }
+                });
+            });
+        }
+    </script>
 </body>
 </html>

@@ -6,6 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log Streams for {{ log_group_name }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        .favorite-button {
+            cursor: pointer;
+            font-size: 1.2em;
+            color: gold;
+            margin-left: 5px;
+        }
+        .favorite-button.not-favorite {
+            color: lightgray;
+        }
+    </style>
 </head>
 <body>
     <main class="container">
@@ -17,18 +28,56 @@
                     <th>Log Stream Name</th>
                     <th>Last Event Time</th>
                     <th>Stored Bytes</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
                 {% for stream in log_streams %}
                 <tr>
-                    <td><a href="/log-group/{{ log_group_name | urlencode }}/stream/{{ stream.logStreamName | urlencode }}?lastEventTimestamp={{ stream.lastEventTimestamp }}">{{ stream.logStreamName }}</a></td>
+                    <td><a href="/log-group/{{ (log_group_name if log_group_name.startswith('/') else '/' + log_group_name) | urlencode }}/stream/{{ stream.logStreamName.lstrip('/') | urlencode }}?lastEventTimestamp={{ stream.lastEventTimestamp }}">{{ stream.logStreamName }}</a></td>
                     <td>{{ stream.lastEventTime }}</td>
                     <td>{{ stream.storedBytes }}</td>
+                    <td>
+                        <span class="favorite-button {% if stream.is_favorite %}is-favorite{% else %}not-favorite{% endif %}" 
+                              data-log-group-name="{{ log_group_name }}" 
+                              data-log-stream-name="{{ stream.logStreamName }}"
+                              data-is-favorite="{{ stream.is_favorite | tojson }}">★</span>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.favorite-button').forEach(button => {
+                button.addEventListener('click', async (event) => {
+                    const logGroupName = event.target.dataset.logGroupName;
+                    const logStreamName = event.target.dataset.logStreamName;
+                    const isFavorite = event.target.dataset.isFavorite === 'true';
+
+                    const response = await fetch(`/favorite/log-group/${encodeURIComponent(logGroupName)}/stream/${encodeURIComponent(logStreamName)}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (data.status === 'success') {
+                        event.target.dataset.isFavorite = String(!isFavorite);
+                        if (isFavorite) {
+                            event.target.classList.remove('is-favorite');
+                            event.target.classList.add('not-favorite');
+                        } else {
+                            event.target.classList.remove('not-favorite');
+                            event.target.classList.add('is-favorite');
+                        }
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>

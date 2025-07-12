@@ -23,7 +23,27 @@
     <main>
         <h1>Log Events for {{ log_stream_name }}</h1>
         <a href="/log-group/{{ log_group_name | urlencode }}">Back to Log Streams</a>
+
+        <div style="margin-bottom: 20px;">
+            <label for="time-span-select">Time Span:</label>
+            <select id="time-span-select">
+                <option value="1hr">Last 1 Hour</option>
+                <option value="3hr">Last 3 Hours</option>
+                <option value="12hr">Last 12 Hours</option>
+                <option value="1day">Last 1 Day</option>
+            </select>
+
+            <label for="start-time-abs">From (YYYY-MM-DDTHH:MM:SS):</label>
+            <input type="datetime-local" id="start-time-abs">
+
+            <label for="end-time-abs">To (YYYY-MM-DDTHH:MM:SS):</label>
+            <input type="datetime-local" id="end-time-abs">
+
+            <button id="apply-time-range">Apply Time Range</button>
+        </div>
+
         <button onclick="expandAllDetails()">Expand All</button>
+        {% if log_events %}
         <table>
             <thead>
                 <tr>
@@ -31,7 +51,7 @@
                     <th>Message</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="log-events-body">
                 {% for event in log_events %}
                 <tr>
                     <td>{{ event.timestamp }}</td>
@@ -40,8 +60,16 @@
                 {% endfor %}
             </tbody>
         </table>
+        {% else %}
+        <p>No log events found for the range {{ start_time_display }} to {{ end_time_display }}. Please adjust your query.</p>
+        {% endif %}
+        {% if next_forward_token %}
+        <button id="load-more-button" data-log-group-name="{{ log_group_name }}" data-log-stream-name="{{ log_stream_name }}" data-next-token="{{ next_forward_token }}">Load More</button>
+        {% endif %}
     </main>
     <script>
+        let currentNextToken = "{{ next_forward_token }}";
+
         function expandAllDetails() {
             const detailsElements = document.querySelectorAll('details');
             const expandButton = document.querySelector('button[onclick="expandAllDetails()"]');
@@ -68,6 +96,73 @@
                 expandButton.textContent = 'Collapse All';
             }
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadMoreButton = document.getElementById('load-more-button');
+            const timeSpanSelect = document.getElementById('time-span-select');
+            const startTimeAbsInput = document.getElementById('start-time-abs');
+            const endTimeAbsInput = document.getElementById('end-time-abs');
+            const applyTimeRangeButton = document.getElementById('apply-time-range');
+
+            // Function to get current URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const initialTimeSpan = urlParams.get('time_span') || '1day';
+            const initialStartTimeAbs = urlParams.get('start_time_abs') || '';
+            const initialEndTimeAbs = urlParams.get('end_time_abs') || '';
+
+            // Set initial values for the time range controls
+            timeSpanSelect.value = initialTimeSpan;
+            startTimeAbsInput.value = initialStartTimeAbs;
+            endTimeAbsInput.value = initialEndTimeAbs;
+
+            applyTimeRangeButton.addEventListener('click', () => {
+                const logGroupName = document.querySelector('#load-more-button').dataset.logGroupName;
+                const logStreamName = document.querySelector('#load-more-button').dataset.logStreamName;
+
+                let newUrl = `/log-group/${encodeURIComponent(logGroupName)}/stream/${encodeURIComponent(logStreamName)}?`;
+
+                if (startTimeAbsInput.value && endTimeAbsInput.value) {
+                    newUrl += `start_time_abs=${encodeURIComponent(startTimeAbsInput.value)}&end_time_abs=${encodeURIComponent(endTimeAbsInput.value)}`;
+                } else {
+                    newUrl += `time_span=${encodeURIComponent(timeSpanSelect.value)}`;
+                }
+                window.location.href = newUrl;
+            });
+
+            if (loadMoreButton) {
+                loadMoreButton.addEventListener('click', async () => {
+                    const logGroupName = loadMoreButton.dataset.logGroupName;
+                    const logStreamName = loadMoreButton.dataset.logStreamName;
+
+                    let url = `/api/log-events?log_group_name=${encodeURIComponent(logGroupName)}&log_stream_name=${encodeURIComponent(logStreamName)}&nextToken=${encodeURIComponent(currentNextToken)}`;
+
+                    // Add time range parameters to the load more request
+                    if (startTimeAbsInput.value && endTimeAbsInput.value) {
+                        url += `&start_time_abs=${encodeURIComponent(startTimeAbsInput.value)}&end_time_abs=${encodeURIComponent(endTimeAbsInput.value)}`;
+                    } else {
+                        url += `&time_span=${encodeURIComponent(timeSpanSelect.value)}`;
+                    }
+
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    const logEventsBody = document.getElementById('log-events-body');
+
+                    data.log_events.forEach(event => {
+                        const row = logEventsBody.insertRow();
+                        const timestampCell = row.insertCell();
+                        const messageCell = row.insertCell();
+                        timestampCell.textContent = event.timestamp;
+                        messageCell.innerHTML = event.message; // Use innerHTML for formatted messages
+                    });
+
+                    currentNextToken = data.next_forward_token;
+                    if (!currentNextToken) {
+                        loadMoreButton.style.display = 'none'; // Hide button if no more tokens
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>
