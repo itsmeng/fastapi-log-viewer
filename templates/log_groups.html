@@ -1,0 +1,33 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Groups</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+    <main class="container">
+        <h1>Log Groups</h1>
+        <table>
+            <thead>
+                <tr>
+                    <th>Log Group Name</th>
+                    <th>Creation Time</th>
+                    <th>Stored Bytes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log_group in log_groups %}
+                <tr>
+                    <td><a href="/log-group/{{ log_group.logGroupName | urlencode }}">{{ log_group.logGroupName }}</a></td>
+                    <td>{{ log_group.creationTime }}</td>
+                    <td>{{ log_group.storedBytes }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </main>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Events for {{ log_stream_name }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        table {
+            margin-left: 0;
+            margin-right: auto;
+            border: 1px solid var(--pico-form-element-border-color);
+        }
+        th, td {
+            border: 1px solid var(--pico-form-element-border-color);
+        }
+        td:first-child {
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Log Events for {{ log_stream_name }}</h1>
+        <a href="/log-group/{{ log_group_name | urlencode }}">Back to Log Streams</a>
+        <button onclick="expandAllDetails()">Expand All</button>
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in log_events %}
+                <tr>
+                    <td>{{ event.timestamp }}</td>
+                    <td>{{ event.message | safe }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </main>
+    <script>
+        function expandAllDetails() {
+            const detailsElements = document.querySelectorAll('details');
+            const expandButton = document.querySelector('button[onclick="expandAllDetails()"]');
+
+            let anyOpen = false;
+            for (const detail of detailsElements) {
+                if (detail.open) {
+                    anyOpen = true;
+                    break;
+                }
+            }
+
+            if (anyOpen) {
+                // Collapse all
+                detailsElements.forEach(detail => {
+                    detail.open = false;
+                });
+                expandButton.textContent = 'Expand All';
+            } else {
+                // Expand all
+                detailsElements.forEach(detail => {
+                    detail.open = true;
+                });
+                expandButton.textContent = 'Collapse All';
+            }
+        }
+    </script>
+</body>
+</html>

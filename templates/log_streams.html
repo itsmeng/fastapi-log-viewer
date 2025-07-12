@@ -1,0 +1,34 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Streams for {{ log_group_name }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+    <main class="container">
+        <h1>Log Streams for {{ log_group_name }}</h1>
+        <a href="/">Back to Log Groups</a>
+        <table>
+            <thead>
+                <tr>
+                    <th>Log Stream Name</th>
+                    <th>Last Event Time</th>
+                    <th>Stored Bytes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stream in log_streams %}
+                <tr>
+                    <td><a href="/log-group/{{ log_group_name | urlencode }}/stream/{{ stream.logStreamName | urlencode }}?lastEventTimestamp={{ stream.lastEventTimestamp }}">{{ stream.logStreamName }}</a></td>
+                    <td>{{ stream.lastEventTime }}</td>
+                    <td>{{ stream.storedBytes }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </main>
+</body>
+</html>
