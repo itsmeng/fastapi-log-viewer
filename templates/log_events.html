@@ -25,19 +25,30 @@
         <a href="/log-group/{{ log_group_name | urlencode }}">Back to Log Streams</a>
 
         <div style="margin-bottom: 20px;">
-            <label for="time-span-select">Time Span:</label>
-            <select id="time-span-select">
-                <option value="1hr">Last 1 Hour</option>
-                <option value="3hr">Last 3 Hours</option>
-                <option value="12hr">Last 12 Hours</option>
-                <option value="1day">Last 1 Day</option>
-            </select>
+            <div>
+                <input type="radio" id="time-mode-relative" name="time-mode" value="relative" checked>
+                <label for="time-mode-relative">Relative Time</label>
+                <input type="radio" id="time-mode-absolute" name="time-mode" value="absolute">
+                <label for="time-mode-absolute">Absolute Time</label>
+            </div>
 
-            <label for="start-time-abs">From (YYYY-MM-DDTHH:MM:SS):</label>
-            <input type="datetime-local" id="start-time-abs">
+            <div id="relative-time-controls">
+                <label for="time-span-select">Time Span:</label>
+                <select id="time-span-select">
+                    <option value="1hr">Last 1 Hour</option>
+                    <option value="3hr">Last 3 Hours</option>
+                    <option value="12hr">Last 12 Hours</option>
+                    <option value="1day">Last 1 Day</option>
+                </select>
+            </div>
 
-            <label for="end-time-abs">To (YYYY-MM-DDTHH:MM:SS):</label>
-            <input type="datetime-local" id="end-time-abs">
+            <div id="absolute-time-controls" style="display: none;">
+                <label for="start-time-abs">From (YYYY-MM-DDTHH:MM:SS):</label>
+                <input type="datetime-local" id="start-time-abs">
+
+                <label for="end-time-abs">To (YYYY-MM-DDTHH:MM:SS):</label>
+                <input type="datetime-local" id="end-time-abs">
+            </div>
 
             <button id="apply-time-range">Apply Time Range</button>
         </div>
@@ -103,6 +114,26 @@
             const startTimeAbsInput = document.getElementById('start-time-abs');
             const endTimeAbsInput = document.getElementById('end-time-abs');
             const applyTimeRangeButton = document.getElementById('apply-time-range');
+            const timeModeRelative = document.getElementById('time-mode-relative');
+            const timeModeAbsolute = document.getElementById('time-mode-absolute');
+            const relativeTimeControls = document.getElementById('relative-time-controls');
+            const absoluteTimeControls = document.getElementById('absolute-time-controls');
+
+            function toggleTimeMode() {
+                if (timeModeRelative.checked) {
+                    relativeTimeControls.style.display = 'block';
+                    absoluteTimeControls.style.display = 'none';
+                } else {
+                    relativeTimeControls.style.display = 'none';
+                    absoluteTimeControls.style.display = 'block';
+                }
+            }
+
+            timeModeRelative.addEventListener('change', toggleTimeMode);
+            timeModeAbsolute.addEventListener('change', toggleTimeMode);
+
+            // Initial toggle based on checked radio button
+            toggleTimeMode();
 
             // Function to get current URL parameters
             const urlParams = new URLSearchParams(window.location.search);
@@ -121,7 +152,7 @@
 
                 let newUrl = `/log-group/${encodeURIComponent(logGroupName)}/stream/${encodeURIComponent(logStreamName)}?`;
 
-                if (startTimeAbsInput.value && endTimeAbsInput.value) {
+                if (timeModeAbsolute.checked) {
                     newUrl += `start_time_abs=${encodeURIComponent(startTimeAbsInput.value)}&end_time_abs=${encodeURIComponent(endTimeAbsInput.value)}`;
                 } else {
                     newUrl += `time_span=${encodeURIComponent(timeSpanSelect.value)}`;

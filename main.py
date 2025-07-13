@@ -167,27 +167,24 @@ async def read_log_stream(request: Request, log_group_name: str, log_stream_name
     next_forward_token = None
     
     try:
+        # Get the last event timestamp from describe_log_streams
+        log_streams_info = get_log_streams(decoded_log_group_name, limit=1)
+        latest_event_timestamp_from_metadata = None
+        if log_streams_info and log_streams_info[0].get('lastEventTimestamp'):
+            latest_event_timestamp_from_metadata = log_streams_info[0]['lastEventTimestamp']
+
         if time_span is None and start_time_abs is None and end_time_abs is None:
             # Default behavior: get the latest event and load 7 days from it
-            # Fetch the very last event to determine the end_time
-            current_time_ms = int(datetime.now().timestamp() * 1000)
-            latest_event_response, _ = get_log_events(decoded_log_group_name, decoded_log_stream_name, 0, current_time_ms, limit=1, startFromHead=False)
-            
-            if latest_event_response and latest_event_response[0]:
-                latest_timestamp_ms = latest_event_response[0]['timestamp']
-                end_time_ms = latest_timestamp_ms
-                start_time_ms = int((datetime.fromtimestamp(latest_timestamp_ms / 1000) - timedelta(days=7)).timestamp() * 1000)
+            if latest_event_timestamp_from_metadata:
+                end_time_ms = latest_event_timestamp_from_metadata
+                start_time_ms = int((datetime.fromtimestamp(latest_event_timestamp_from_metadata / 1000) - timedelta(days=7)).timestamp() * 1000)
             else:
                 # Fallback if no events are found, use current time - 7 days
                 start_time_ms, end_time_ms = calculate_time_range(time_span, start_time_abs, end_time_abs)
         elif time_span is not None and start_time_abs is None and end_time_abs is None:
-            # If a time_span is provided, get the latest event to set the end_time
-            current_time_ms = int(datetime.now().timestamp() * 1000)
-            latest_event_response, _ = get_log_events(decoded_log_group_name, decoded_log_stream_name, 0, current_time_ms, limit=1, startFromHead=False)
-            
-            if latest_event_response and latest_event_response[0]:
-                latest_timestamp_ms = latest_event_response[0]['timestamp']
-                start_time_ms, end_time_ms = calculate_time_range(time_span, latest_event_timestamp_ms=latest_timestamp_ms)
+            # If a time_span is provided, use the latest event from metadata to set the end_time
+            if latest_event_timestamp_from_metadata:
+                start_time_ms, end_time_ms = calculate_time_range(time_span, latest_event_timestamp_ms=latest_event_timestamp_from_metadata)
             else:
                 # Fallback if no events are found, use current time as end_time
                 start_time_ms, end_time_ms = calculate_time_range(time_span, start_time_abs, end_time_abs)
@@ -280,6 +277,9 @@ async def get_more_log_events(log_group_name: str, log_stream_name: str, time_sp
 @app.get("/log-group/{log_group_name:path}", response_class=HTMLResponse)
 async def read_log_group(request: Request, log_group_name: str):
     log_group_name = unquote_plus(log_group_name)
+    # Ensure log_group_name starts with a slash for AWS API
+    if not log_group_name.startswith('/'):
+        log_group_name = '/' + log_group_name
     try:
         log_streams = get_log_streams(log_group_name, limit=50)
     except Exception as e:
@@ -306,8 +306,8 @@ def get_log_events(log_group_name: str, log_stream_name: str, start_time_ms: int
     logging.info(f"Fetching log events for Log Group: {log_group_name}, Log Stream: {log_stream_name}")
 
     params = {
-        "logGroupName": log_group_name,
-        "logStreamName": log_stream_name,
+        "logGroupName": '/' + log_group_name.lstrip('/'),
+        "logStreamName": log_stream_name.lstrip('/'),
         "startTime": start_time_ms,
         "endTime": end_time_ms,
         "limit": limit,
