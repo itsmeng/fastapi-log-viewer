@@ -24,36 +24,43 @@
         <h1>Log Events for {{ log_stream_name }}</h1>
         <a href="/log-group/{{ log_group_name | urlencode }}">Back to Log Streams</a>
 
-        <div style="margin-bottom: 20px;">
-            <div>
-                <input type="radio" id="time-mode-relative" name="time-mode" value="relative" checked>
-                <label for="time-mode-relative">Relative Time</label>
-                <input type="radio" id="time-mode-absolute" name="time-mode" value="absolute">
-                <label for="time-mode-absolute">Absolute Time</label>
-            </div>
+        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <fieldset style="margin-bottom: 0; padding: 0.5rem;">
+                <legend style="font-size: 0.75rem; padding: 0 0.25rem;">Time Range</legend>
+                <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem;">
+                    <div style="display: flex; flex-direction: column;">
+                        <div>
+                            <input type="radio" id="time-mode-relative" name="time-mode" value="relative" checked style="margin: 0; transform: scale(0.8);">
+                            <label for="time-mode-relative" style="margin: 0;">Relative</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="time-mode-absolute" name="time-mode" value="absolute" style="margin: 0; transform: scale(0.8);">
+                            <label for="time-mode-absolute" style="margin: 0;">Absolute</label>
+                        </div>
+                    </div>
 
-            <div id="relative-time-controls">
-                <label for="time-span-select">Time Span:</label>
-                <select id="time-span-select">
-                    <option value="1hr">Last 1 Hour</option>
-                    <option value="3hr">Last 3 Hours</option>
-                    <option value="12hr">Last 12 Hours</option>
-                    <option value="1day">Last 1 Day</option>
-                </select>
-            </div>
+                    <div id="relative-time-controls" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <label for="time-span-select" style="margin-bottom: 0;">Span:</label>
+                        <select id="time-span-select" style="margin-bottom: 0; font-size: inherit;">
+                            <option value="1hr">Last 1 Hr</option>
+                            <option value="3hr">Last 3 Hrs</option>
+                            <option value="12hr">Last 12 Hrs</option>
+                            <option value="1day">Last 1 Day</option>
+                        </select>
+                    </div>
 
-            <div id="absolute-time-controls" style="display: none;">
-                <label for="start-time-abs">From (YYYY-MM-DDTHH:MM:SS):</label>
-                <input type="datetime-local" id="start-time-abs">
+                    <div id="absolute-time-controls" style="display: none; align-items: center; gap: 0.5rem;">
+                        <label for="start-time-abs" style="margin-bottom: 0;">From:</label>
+                        <input type="datetime-local" id="start-time-abs" style="margin-bottom: 0; font-size: inherit;">
+                        <label for="end-time-abs" style="margin-bottom: 0;">To:</label>
+                        <input type="datetime-local" id="end-time-abs" style="margin-bottom: 0; font-size: inherit;">
+                    </div>
 
-                <label for="end-time-abs">To (YYYY-MM-DDTHH:MM:SS):</label>
-                <input type="datetime-local" id="end-time-abs">
-            </div>
-
-            <button id="apply-time-range">Apply Time Range</button>
+                    <button id="apply-time-range" class="secondary" style="margin-bottom: 0; padding: 0.25rem 0.5rem; line-height: 1.2; font-size: 0.75rem;">Apply</button>
+                </div>
+            </fieldset>
+            <button onclick="expandAllDetails()" class="secondary" style="margin-bottom: 0; padding: 0.25rem 0.5rem; line-height: 1.2; font-size: 0.75rem;">Expand All</button>
         </div>
-
-        <button onclick="expandAllDetails()">Expand All</button>
         {% if log_events %}
         <table>
             <thead>
@@ -74,9 +81,18 @@
         {% else %}
         <p>No log events found for the range {{ start_time_display }} to {{ end_time_display }}. Please adjust your query.</p>
         {% endif %}
+        <div id="load-more-container">
         {% if next_forward_token %}
-        <button id="load-more-button" data-log-group-name="{{ log_group_name }}" data-log-stream-name="{{ log_stream_name }}" data-next-token="{{ next_forward_token }}">Load More</button>
+            <button id="load-more-button" 
+                    data-log-group-name="{{ log_group_name }}" 
+                    data-log-stream-name="{{ log_stream_name }}" 
+                    data-next-token="{{ next_forward_token }}"
+                    data-start-time-ms="{{ start_time_ms }}"
+                    data-end-time-ms="{{ end_time_ms }}">Load More</button>
+        {% else %}
+            <p>No more logs.</p>
         {% endif %}
+        </div>
     </main>
     <script>
         let currentNextToken = "{{ next_forward_token }}";
@@ -121,11 +137,11 @@
 
             function toggleTimeMode() {
                 if (timeModeRelative.checked) {
-                    relativeTimeControls.style.display = 'block';
+                    relativeTimeControls.style.display = 'flex';
                     absoluteTimeControls.style.display = 'none';
                 } else {
                     relativeTimeControls.style.display = 'none';
-                    absoluteTimeControls.style.display = 'block';
+                    absoluteTimeControls.style.display = 'flex';
                 }
             }
 
@@ -164,15 +180,10 @@
                 loadMoreButton.addEventListener('click', async () => {
                     const logGroupName = loadMoreButton.dataset.logGroupName;
                     const logStreamName = loadMoreButton.dataset.logStreamName;
+                    const startTimeMs = loadMoreButton.dataset.startTimeMs;
+                    const endTimeMs = loadMoreButton.dataset.endTimeMs;
 
-                    let url = `/api/log-events?log_group_name=${encodeURIComponent(logGroupName)}&log_stream_name=${encodeURIComponent(logStreamName)}&nextToken=${encodeURIComponent(currentNextToken)}`;
-
-                    // Add time range parameters to the load more request
-                    if (startTimeAbsInput.value && endTimeAbsInput.value) {
-                        url += `&start_time_abs=${encodeURIComponent(startTimeAbsInput.value)}&end_time_abs=${encodeURIComponent(endTimeAbsInput.value)}`;
-                    } else {
-                        url += `&time_span=${encodeURIComponent(timeSpanSelect.value)}`;
-                    }
+                    let url = `/api/log-events?log_group_name=${encodeURIComponent(logGroupName)}&log_stream_name=${encodeURIComponent(logStreamName)}&nextToken=${encodeURIComponent(currentNextToken)}&start_time_ms=${startTimeMs}&end_time_ms=${endTimeMs}`;
 
                     const response = await fetch(url);
                     const data = await response.json();
@@ -189,7 +200,8 @@
 
                     currentNextToken = data.next_forward_token;
                     if (!currentNextToken) {
-                        loadMoreButton.style.display = 'none'; // Hide button if no more tokens
+                        const loadMoreContainer = document.getElementById('load-more-container');
+                        loadMoreContainer.innerHTML = '<p>No more logs.</p>';
                     }
                 });
             }

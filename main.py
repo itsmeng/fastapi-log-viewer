@@ -192,6 +192,12 @@ async def read_log_stream(request: Request, log_group_name: str, log_stream_name
             start_time_ms, end_time_ms = calculate_time_range(time_span, start_time_abs, end_time_abs)
 
         log_events, next_forward_token = get_log_events(decoded_log_group_name, decoded_log_stream_name, start_time_ms, end_time_ms, nextToken)
+
+        # Peek ahead to see if the next token will return any events.
+        if next_forward_token:
+            peek_events, _ = get_log_events(decoded_log_group_name, decoded_log_stream_name, start_time_ms, end_time_ms, next_forward_token)
+            if not peek_events:
+                next_forward_token = None
     except Exception as e:
         error_message = f"Error fetching log events for {decoded_log_group_name}/{decoded_log_stream_name}: {e}"
         # Determine the back URL based on the current context
@@ -236,41 +242,59 @@ async def read_log_stream(request: Request, log_group_name: str, log_stream_name
                 # If neither JSON nor Python literal, keep original message
                 event['message'] = message
 
-    return templates.TemplateResponse("log_events.html", {"request": request, "log_group_name": log_group_name, "log_stream_name": log_stream_name, "log_events": log_events, "is_favorite_stream": is_favorite_stream, "next_forward_token": next_forward_token, "start_time_display": datetime.fromtimestamp(start_time_ms / 1000).strftime('%Y-%m-%d %H:%M:%S'), "end_time_display": datetime.fromtimestamp(end_time_ms / 1000).strftime('%Y-%m-%d %H:%M:%S')})
+    return templates.TemplateResponse("log_events.html", {
+        "request": request, 
+        "log_group_name": log_group_name, 
+        "log_stream_name": log_stream_name, 
+        "log_events": log_events, 
+        "is_favorite_stream": is_favorite_stream, 
+        "next_forward_token": next_forward_token, 
+        "start_time_display": datetime.fromtimestamp(start_time_ms / 1000).strftime('%Y-%m-%d %H:%M:%S'), 
+        "end_time_display": datetime.fromtimestamp(end_time_ms / 1000).strftime('%Y-%m-%d %H:%M:%S'),
+        "start_time_ms": start_time_ms,
+        "end_time_ms": end_time_ms
+    })
 
 
 
 @app.get("/api/log-events")
-async def get_more_log_events(log_group_name: str, log_stream_name: str, time_span: str = None, start_time_abs: str = None, end_time_abs: str = None, nextToken: str = None):
+async def get_more_log_events(log_group_name: str, log_stream_name: str, start_time_ms: int, end_time_ms: int, nextToken: str = None):
     decoded_log_group_name = unquote_plus(log_group_name)
     decoded_log_stream_name = unquote_plus(log_stream_name)
-    
-    if time_span is None and start_time_abs is None and end_time_abs is None:
-        # Default behavior: get the latest event and load 7 days from it
-        # Fetch the very last event to determine the end_time
-        current_time_ms = int(datetime.now().timestamp() * 1000)
-        latest_event_response, _ = get_log_events(decoded_log_group_name, decoded_log_stream_name, 0, current_time_ms, limit=1, startFromHead=False)
-        
-        if latest_event_response and latest_event_response[0]:
-            latest_timestamp_ms = latest_event_response[0]['timestamp']
-            end_time_ms = latest_timestamp_ms
-            start_time_ms = int((datetime.fromtimestamp(latest_timestamp_ms / 1000) - timedelta(days=7)).timestamp() * 1000)
-        else:
-            # Fallback if no events are found, use current time - 7 days
-            start_time_ms, end_time_ms = calculate_time_range(time_span, start_time_abs, end_time_abs)
-    elif time_span is not None and start_time_abs is None and end_time_abs is None:
-        # If a time_span is provided, get the latest event to set the end_time
-        current_time_ms = int(datetime.now().timestamp() * 1000)
-        latest_event_response, _ = get_log_events(decoded_log_group_name, decoded_log_stream_name, 0, current_time_ms, limit=1, startFromHead=False)
-        
-        if latest_event_response and latest_event_response[0]:
-            latest_timestamp_ms = latest_event_response[0]['timestamp']
-            start_time_ms, end_time_ms = calculate_time_range(time_span, latest_event_timestamp_ms=latest_timestamp_ms)
-        else:
-            # Fallback if no events are found, use current time as end_time
-            start_time_ms, end_time_ms = calculate_time_range(time_span, start_time_abs, end_time_abs)
-    else:
-        start_time_ms, end_time_ms = calculate_time_range(time_span, start_time_abs, end_time_abs)
+
+    log_events, next_forward_token = get_log_events(decoded_log_group_name, decoded_log_stream_name, start_time_ms, end_time_ms, nextToken)
+
+    formatted_events = []
+    for event in log_events:
+        timestamp = datetime.fromtimestamp(event['timestamp'] / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        event['timestamp'] = timestamp
+
+        message = event['message']
+        LINE_THRESHOLD = 10
+        PREVIEW_CHAR_LIMIT = 80
+
+        def format_message(parsed_data, original_message):
+            pretty_json = json.dumps(parsed_data, indent=2)
+            num_lines = pretty_json.count('\n') + 1
+
+            if num_lines > LINE_THRESHOLD:
+                preview = original_message.split('\n')[0]
+                if len(preview) > PREVIEW_CHAR_LIMIT:
+                    preview = preview[:PREVIEW_CHAR_LIMIT] + "..."
+                return f"<details><summary><span style=\"color: gray;\">Details:</span> {preview}</summary><pre><code>{pretty_json}</code></pre></details>"
+            else:
+                return f"<pre><code>{pretty_json}</code></pre>"
+
+        try:
+            parsed_message = json.loads(message)
+            event['message'] = format_message(parsed_message, message)
+        except json.JSONDecodeError:
+            try:
+                parsed_message = ast.literal_eval(message)
+                event['message'] = format_message(parsed_message, message)
+            except (ValueError, SyntaxError):
+                event['message'] = message
+        formatted_events.append(event)
 
     return {"log_events": formatted_events, "next_forward_token": next_forward_token}
 
@@ -305,21 +329,32 @@ def get_log_events(log_group_name: str, log_stream_name: str, start_time_ms: int
     client = boto3.client("logs")
     logging.info(f"Fetching log events for Log Group: {log_group_name}, Log Stream: {log_stream_name}")
 
-    params = {
-        "logGroupName": '/' + log_group_name.lstrip('/'),
-        "logStreamName": log_stream_name.lstrip('/'),
-        "startTime": start_time_ms,
-        "endTime": end_time_ms,
-        "limit": limit,
-        "startFromHead": startFromHead
-    }
-    if nextToken:
-        params["nextToken"] = nextToken
+    while True:
+        params = {
+            "logGroupName": '/' + log_group_name.lstrip('/'),
+            "logStreamName": log_stream_name.lstrip('/'),
+            "startTime": start_time_ms,
+            "endTime": end_time_ms,
+            "limit": limit,
+            "startFromHead": startFromHead
+        }
+        if nextToken:
+            params["nextToken"] = nextToken
 
-    logging.info(f"Calling get_log_events with: {params}")
-    response = client.get_log_events(**params)
-    logging.info(f"Log events response: {response}")
-    return response["events"], response.get("nextForwardToken")
+        logging.info(f"Calling get_log_events with: {params}")
+        response = client.get_log_events(**params)
+        logging.info(f"Log events response: {response}")
+
+        events = response["events"]
+        next_token = response.get("nextForwardToken")
+
+        if events:
+            return events, next_token
+
+        if not next_token or next_token == nextToken:
+            return [], None
+
+        nextToken = next_token
 
 
 
