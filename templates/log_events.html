@@ -22,7 +22,15 @@
 <body>
     <main>
         <h1>Log Events for {{ log_stream_name }}</h1>
-        <a href="/log-group/{{ log_group_name | urlencode }}">Back to Log Streams</a>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <a href="/log-group/{{ log_group_name | urlencode }}">Back to Log Streams</a>
+            <a href="https://{{ aws_region }}.console.aws.amazon.com/cloudwatch/home?region={{ aws_region }}#logsV2:log-groups/log-group/{{ encoded_log_group_name }}/log-events/{{ encoded_log_stream_name }}" target="_blank" title="View in AWS Console" style="text-decoration: none; color: inherit;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-arrow-up-right" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
+                    <path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>
+                </svg>
+            </a>
+        </div>
 
         <div style="display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-bottom: 1rem;">
             <fieldset style="margin-bottom: 0; padding: 0.5rem;">
@@ -96,6 +104,8 @@
     </main>
     <script>
         let currentNextToken = "{{ next_forward_token }}";
+        const logGroupName = "{{ log_group_name }}";
+        const logStreamName = "{{ log_stream_name }}";
 
         function expandAllDetails() {
             const detailsElements = document.querySelectorAll('details');
@@ -163,13 +173,15 @@
             endTimeAbsInput.value = initialEndTimeAbs;
 
             applyTimeRangeButton.addEventListener('click', () => {
-                const logGroupName = document.querySelector('#load-more-button').dataset.logGroupName;
-                const logStreamName = document.querySelector('#load-more-button').dataset.logStreamName;
-
                 let newUrl = `/log-group/${encodeURIComponent(logGroupName)}/stream/${encodeURIComponent(logStreamName)}?`;
 
                 if (timeModeAbsolute.checked) {
-                    newUrl += `start_time_abs=${encodeURIComponent(startTimeAbsInput.value)}&end_time_abs=${encodeURIComponent(endTimeAbsInput.value)}`;
+                    if (startTimeAbsInput.value) {
+                        newUrl += `start_time_abs=${encodeURIComponent(startTimeAbsInput.value)}`;
+                    }
+                    if (endTimeAbsInput.value) {
+                        newUrl += `${startTimeAbsInput.value ? '&' : ''}end_time_abs=${encodeURIComponent(endTimeAbsInput.value)}`;
+                    }
                 } else {
                     newUrl += `time_span=${encodeURIComponent(timeSpanSelect.value)}`;
                 }

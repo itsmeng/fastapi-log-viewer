@@ -242,17 +242,28 @@ async def read_log_stream(request: Request, log_group_name: str, log_stream_name
                 # If neither JSON nor Python literal, keep original message
                 event['message'] = message
 
+    client = boto3.client("logs")
+    aws_region = client.meta.region_name
+
+    # AWS Console URL encoding requires double URL encoding for some characters
+    encoded_log_group_name = quote_plus(quote_plus(log_group_name, safe=""), safe="")
+    encoded_log_stream_name = quote_plus(quote_plus(log_stream_name, safe=""), safe="")
+
+
     return templates.TemplateResponse("log_events.html", {
-        "request": request, 
-        "log_group_name": log_group_name, 
-        "log_stream_name": log_stream_name, 
-        "log_events": log_events, 
-        "is_favorite_stream": is_favorite_stream, 
-        "next_forward_token": next_forward_token, 
-        "start_time_display": datetime.fromtimestamp(start_time_ms / 1000).strftime('%Y-%m-%d %H:%M:%S'), 
+        "request": request,
+        "log_group_name": log_group_name,
+        "log_stream_name": log_stream_name,
+        "log_events": log_events,
+        "is_favorite_stream": is_favorite_stream,
+        "next_forward_token": next_forward_token,
+        "start_time_display": datetime.fromtimestamp(start_time_ms / 1000).strftime('%Y-%m-%d %H:%M:%S'),
         "end_time_display": datetime.fromtimestamp(end_time_ms / 1000).strftime('%Y-%m-%d %H:%M:%S'),
         "start_time_ms": start_time_ms,
-        "end_time_ms": end_time_ms
+        "end_time_ms": end_time_ms,
+        "aws_region": aws_region,
+        "encoded_log_group_name": encoded_log_group_name,
+        "encoded_log_stream_name": encoded_log_stream_name
     })
 
 
